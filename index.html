@@ -568,7 +568,7 @@
         <h1>${monthLabel(viewMonth)}</h1>
         <button type="button" class="icon-btn ${isCurrent ? 'invisible' : ''}" data-month-shift="1" aria-label="Mois suivant">›</button>
       </div>
-      ${needsBackup() ? `<div class="banner"><span>Pense à sauvegarder tes données.</span><button type="button" data-backup>Sauvegarder</button></div>` : ''}
+      ${needsBackup() ? `<div class="banner"><span>C'est le moment de faire ta copie de secours.</span><button type="button" data-backup>Faire la copie</button></div>` : ''}
       <div class="card hero">
         <div class="label">Disponible pour toi${isCurrent ? ', à ce jour' : ''}</div>
         <div class="big ${s.available < 0 && chargesSet ? 'neg' : ''}">${money(chargesSet ? s.available : s.net)}</div>
@@ -660,13 +660,13 @@
         <button type="button" class="row tap" data-new-charge><span class="add">Ajouter une charge</span></button>
       </div>
       <p class="foot">Le montant à droite est ce que la charge te coûte par mois.</p>
-      <h2 class="section">Sauvegarde</h2>
+      <h2 class="section">Copie de secours</h2>
       <div class="card">
-        <button type="button" class="row tap" data-backup><span class="add">Sauvegarder mes données</span></button>
-        <button type="button" class="row tap" data-restore><span class="add">Restaurer une sauvegarde</span></button>
+        <button type="button" class="row tap" data-backup><span class="add">Faire une copie de secours</span></button>
+        <button type="button" class="row tap" data-restore><span class="add">Reprendre une copie de secours</span></button>
       </div>
-      <p class="foot">${state.lastBackup ? `Dernière sauvegarde le ${longDate(state.lastBackup)}.` : 'Aucune sauvegarde pour l’instant.'}
-        Tes données restent sur ce téléphone. Si tu supprimes l'icône ou changes d'iPhone, seule une sauvegarde permet de les retrouver.</p>`;
+      <p class="foot">Tes saisies sont enregistrées automatiquement sur ce téléphone. La copie ne sert que si tu changes d'iPhone ou supprimes l'icône : range-la dans Fichiers, sur iCloud Drive. L'appli te la rappelle une fois par mois.
+        ${state.lastBackup ? `Dernière copie le ${longDate(state.lastBackup)}.` : 'Aucune copie pour l’instant.'}</p>`;
   }
 
   function render() {
@@ -870,7 +870,7 @@
     toast('Réglage enregistré');
   }
 
-  // ---------- Sauvegarde ----------
+  // ---------- Copie de secours ----------
 
   async function backup() {
     const name = `ma-compta-${todayKey()}.json`;
@@ -878,7 +878,7 @@
     const file = new File([payload], name, { type: 'application/json' });
     try {
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'Sauvegarde Ma compta' });
+        await navigator.share({ files: [file], title: 'Copie de secours Ma compta' });
       } else {
         const url = URL.createObjectURL(file);
         const a = document.createElement('a');
@@ -892,10 +892,10 @@
       state.lastBackup = todayKey();
       save();
       render();
-      toast('Sauvegarde créée');
+      toast('Copie de secours créée');
     } catch (e) {
       if (e && e.name === 'AbortError') return;
-      toast("La sauvegarde n'a pas pu être créée");
+      toast("La copie n'a pas pu être créée");
     }
   }
 
@@ -904,15 +904,15 @@
       const parsed = JSON.parse(await file.text());
       const data = parsed && parsed.app === 'ma-compta' ? parsed.data : null;
       if (!isValidState(data)) throw new Error('invalid');
-      if (!confirm('Remplacer les données de ce téléphone par cette sauvegarde ?')) return;
+      if (!confirm('Remplacer les données de ce téléphone par cette copie de secours ?')) return;
       state = normalize(data);
       closePastMonths();
       save();
       viewMonth = monthOf(todayKey());
       render();
-      toast('Sauvegarde restaurée');
+      toast('Copie de secours reprise');
     } catch (e) {
-      toast("Ce fichier n'est pas une sauvegarde Ma compta");
+      toast("Ce fichier n'est pas une copie de secours Ma compta");
     }
   }
 
