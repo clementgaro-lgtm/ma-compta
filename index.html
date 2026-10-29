@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Ma compta">
+<meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Ma compta</title>
+<style>
+  :root {
+    --bg: #F2F2F7;
+    --card: #FFFFFF;
+    --text: #1C1C1E;
+    --muted: #6C6C70;
+    --line: rgba(60, 60, 67, 0.16);
+    --accent: #0F766E;
+    --accent-soft: #E3F2EF;
+    --on-accent: #FFFFFF;
+    --negative: #B3261E;
+    --track: #E5E5EA;
+    --bar: rgba(249, 249, 249, 0.94);
+    --overlay: #F2F2F7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000;
+      --card: #1C1C1E;
+      --text: #F2F2F7;
+      --muted: #98989F;
+      --line: rgba(84, 84, 88, 0.55);
+      --accent: #2EC4B2;
+      --accent-soft: #0E302C;
+      --on-accent: #00211D;
+      --negative: #FF8A80;
+      --track: #2C2C2E;
+      --bar: rgba(22, 22, 22, 0.94);
+      --overlay: #000000;
+    }
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  body.locked { overflow: hidden; }
+  button, input { font: inherit; color: inherit; }
+  button { background: none; border: 0; padding: 0; cursor: pointer; }
+  [hidden] { display: none !important; }
+
+  main {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: calc(env(safe-area-inset-top) + 8px) 16px calc(env(safe-area-inset-bottom) + 96px);
+  }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0 14px; }
+  h1 { font-size: 28px; font-weight: 700; margin: 8px 0 14px; letter-spacing: -0.01em; }
+  .topbar h1 { margin: 0; text-align: center; flex: 1; }
+  .icon-btn { width: 40px; height: 40px; border-radius: 20px; font-size: 26px; line-height: 1; color: var(--accent); }
+  .icon-btn.invisible { visibility: hidden; }
+
+  .card { background: var(--card); border-radius: 14px; overflow: hidden; margin-bottom: 18px; }
+  .hero { padding: 18px 16px 16px; }
+  .label { font-size: 14px; color: var(--muted); }
+  .big { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; margin: 2px 0 12px; color: var(--accent); }
+  .big.neg { color: var(--negative); }
+  .track { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
+  .fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.3s; }
+  .hint { font-size: 15px; color: var(--muted); margin-top: 8px; }
+  .hint.accent { color: var(--accent); margin-top: 2px; }
+  .hint-btn { color: var(--accent); text-decoration: underline; }
+
+  .primary {
+    display: block; width: 100%; margin-top: 16px; padding: 14px;
+    border-radius: 12px; background: var(--accent); color: var(--on-accent);
+    font-weight: 600; text-align: center;
+  }
+  .primary:active { opacity: 0.85; }
+
+  .row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    min-height: 48px; padding: 10px 16px; width: 100%; text-align: left;
+    border-top: 0.5px solid var(--line);
+  }
+  .card > .row:first-child { border-top: 0; }
+  .row .k { color: var(--muted); }
+  .row .v { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .row.total .k, .row.total .v { color: var(--text); font-weight: 600; }
+  .row.tap:active { background: var(--track); }
+  .row .main { display: flex; flex-direction: column; min-width: 0; }
+  .row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .sub { font-size: 14px; color: var(--muted); }
+  .row .end { display: flex; align-items: center; gap: 6px; }
+  .chev { color: var(--muted); font-size: 22px; line-height: 1; }
+  .row .add { color: var(--accent); }
+  .row.todo .v { color: var(--negative); font-size: 15px; }
+
+  .section { font-size: 13px; font-weight: 400; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); margin: 0 16px 6px; }
+  .foot { font-size: 13px; color: var(--muted); margin: -10px 16px 22px; }
+  .empty { padding: 18px 16px; color: var(--muted); font-size: 15px; }
+
+  .banner {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    background: var(--accent-soft); color: var(--text); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 14px; font-size: 15px;
+  }
+  .banner button { color: var(--accent); font-weight: 600; white-space: nowrap; }
+
+  .pct { display: flex; align-items: center; gap: 4px; }
+  .row .pct input { flex: none; width: 64px; text-align: right; border: 0; background: var(--track); border-radius: 8px; padding: 6px 8px; font-size: 17px; outline: none; }
+
+  .tabbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    display: flex; justify-content: space-around;
+    padding: 6px 8px calc(env(safe-area-inset-bottom) + 6px);
+    background: var(--bar); border-top: 0.5px solid var(--line);
+    -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  }
+  .tabbar button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; color: var(--muted); padding: 4px 0; }
+  .tabbar button.active { color: var(--accent); }
+  .tabbar svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  .sheet { position: fixed; inset: 0; z-index: 20; background: var(--overlay); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .sheet-bar {
+    position: sticky; top: 0; z-index: 1;
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+    padding: calc(env(safe-area-inset-top) + 8px) 16px 8px; background: var(--overlay);
+  }
+  .sheet-bar h2 { font-size: 17px; font-weight: 600; margin: 0; }
+  .sheet-bar .link { color: var(--accent); justify-self: start; padding: 8px 0; }
+  .sheet-bar .link.strong { font-weight: 600; justify-self: end; }
+  .sheet-body { max-width: 560px; margin: 0 auto; padding: 8px 16px calc(env(safe-area-inset-bottom) + 24px); }
+
+  .field-label { display: block; font-size: 13px; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); margin: 0 16px 6px; }
+  .amount { display: flex; align-items: baseline; gap: 6px; background: var(--card); border-radius: 14px; padding: 10px 16px; margin-bottom: 8px; }
+  .amount input { flex: 1; min-width: 0; border: 0; background: none; font-size: 36px; font-weight: 700; outline: none; padding: 0; }
+  .amount span { font-size: 28px; font-weight: 600; color: var(--muted); }
+  .row input[type="date"], .row input[type="text"] { border: 0; background: none; text-align: right; font-size: 17px; outline: none; min-width: 0; flex: 1; }
+  .row input[type="date"] { color: var(--accent); -webkit-appearance: none; appearance: none; }
+  .error { color: var(--negative); font-size: 14px; margin: 0 16px 12px; }
+  .danger-btn { display: block; width: 100%; padding: 14px; margin-top: 12px; border-radius: 12px; background: var(--card); color: var(--negative); font-weight: 500; }
+
+  .segmented { display: flex; background: var(--track); border-radius: 9px; padding: 2px; margin: 0 0 18px; }
+  .segmented label { flex: 1; text-align: center; font-size: 15px; padding: 7px 4px; border-radius: 7px; cursor: pointer; }
+  .segmented input { position: absolute; opacity: 0; pointer-events: none; }
+  .segmented label:has(input:checked) { background: var(--card); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+
+  .switch { -webkit-appearance: none; appearance: none; width: 51px; height: 31px; border-radius: 16px; background: var(--track); position: relative; flex-shrink: 0; transition: background 0.2s; cursor: pointer; margin: 0; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); transition: transform 0.2s; }
+  .switch:checked { background: var(--accent); }
+  .switch:checked::after { transform: translateX(20px); }
+
+  .toast {
+    position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 84px); z-index: 30;
+    transform: translateX(-50%); background: var(--text); color: var(--bg);
+    padding: 10px 16px; border-radius: 20px; font-size: 15px; white-space: nowrap;
+    opacity: 0; transition: opacity 0.2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<main>
+  <section id="screen-month"></section>
+  <section id="screen-history" hidden></section>
+  <section id="screen-settings" hidden></section>
+</main>
+
+<nav class="tabbar" aria-label="Navigation">
+  <button type="button" data-tab="month" class="active">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+    Mois
+  </button>
+  <button type="button" data-tab="history">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20v-8M12 20V5M19 20v-5"/></svg>
+    Historique
+  </button>
+  <button type="button" data-tab="settings">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
+    Réglages
+  </button>
+</nav>
+
+<div class="sheet" id="sheet-day" role="dialog" aria-modal="true" aria-labelledby="day-title" hidden>
+  <div class="sheet-bar">
+    <button type="button" class="link" data-close>Annuler</button>
+    <h2 id="day-title">Ma journée</h2>
+    <button type="button" class="link strong" data-save-day>Enregistrer</button>
+  </div>
+  <div class="sheet-body">
+    <div class="card">
+      <label class="row"><span>Date</span><input type="date" id="day-date"></label>
+    </div>
+    <label class="field-label" for="day-amount">Total des actes du jour</label>
+    <div class="amount">
+      <input type="text" id="day-amount" inputmode="decimal" autocomplete="off" placeholder="0">
+      <span>€</span>
+    </div>
+    <p class="error" id="day-error" hidden></p>
+    <div class="card" id="day-preview"></div>
+    <button type="button" class="primary" data-save-day>Enregistrer</button>
+    <button type="button" class="danger-btn" id="day-delete" hidden>Supprimer cette journée</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheet-charge" role="dialog" aria-modal="true" aria-labelledby="charge-title" hidden>
+  <div class="sheet-bar">
+    <button type="button" class="link" data-close>Annuler</button>
+    <h2 id="charge-title">Charge</h2>
+    <button type="button" class="link strong" data-save-charge>Enregistrer</button>
+  </div>
+  <div class="sheet-body">
+    <div class="card">
+      <label class="row"><span>Nom</span><input type="text" id="charge-name" autocomplete="off" placeholder="Assurance voiture"></label>
+      <label class="row"><span>Montant</span><input type="text" id="charge-amount" inputmode="decimal" autocomplete="off" placeholder="0 €"></label>
+    </div>
+    <div class="segmented" role="radiogroup" aria-label="Fréquence">
+      <label><input type="radio" name="charge-freq" value="month" checked>Par mois</label>
+      <label><input type="radio" name="charge-freq" value="quarter">Par trimestre</label>
+      <label><input type="radio" name="charge-freq" value="year">Par an</label>
+    </div>
+    <div class="card">
+      <label class="row">
+        <span class="main"><span>Partagée en deux</span><span class="sub">Loyer, internet : tu paies la moitié</span></span>
+        <input type="checkbox" class="switch" id="charge-shared">
+      </label>
+    </div>
+    <p class="error" id="charge-error" hidden></p>
+    <p class="foot" id="charge-preview" style="margin-top: -6px"></p>
+    <button type="button" class="primary" data-save-charge>Enregistrer</button>
+    <button type="button" class="danger-btn" id="charge-delete" hidden>Supprimer cette charge</button>
+  </div>
+</div>
+
+<input type="file" id="import-file" accept="application/json,.json" hidden>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  const STORE_KEY = 'ma-compta-v1';
+  const BACKUP_EVERY_DAYS = 30;
+  const FREQ = {
+    month: { divisor: 1, label: 'par mois' },
+    quarter: { divisor: 3, label: 'par trimestre' },
+    year: { divisor: 12, label: 'par an' }
+  };
+  const DEFAULT_CHARGES = [
+    ['Prêt', false],
+    ['Leasing voiture', false],
+    ['Assurance RCP', false],
+    ['Assurance voiture', false],
+    ['Téléphone', false],
+    ['Loyer', true],
+    ['Internet', true]
+  ];
+
+  const $ = (selector) => document.querySelector(selector);
+  const uid = () => Math.random().toString(36).slice(2, 10);
+  const pad = (n) => String(n).padStart(2, '0');
+
+  // ---------- Dates ----------
+
+  function dateKey(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+  function todayKey() { return dateKey(new Date()); }
+  function monthOf(key) { return key.slice(0, 7); }
+  function parseKey(key) {
+    const [y, m, d] = key.split('-').map(Number);
+    return new Date(y, m - 1, d || 1);
+  }
+  function shiftMonth(month, delta) {
+    const d = parseKey(month + '-01');
+    d.setMonth(d.getMonth() + delta);
+    return monthOf(dateKey(d));
+  }
+  function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+  function monthLabel(month) {
+    return capitalize(parseKey(month + '-01').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }));
+  }
+  function dayLabel(key) {
+    return capitalize(parseKey(key).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }));
+  }
+  function longDate(key) {
+    return parseKey(key).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+  function daysBetween(a, b) { return Math.round((parseKey(b) - parseKey(a)) / 86400000); }
+
+  // ---------- Nombres ----------
+
+  const euros = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+  const eurosCents = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  function money(v) { return euros.format(Math.round(v) || 0).replace('-', '−'); }
+  function minus(v) { return Math.round(v) ? '−' + money(v) : money(0); }
+  function exact(v) { return Number.isInteger(v) ? money(v) : eurosCents.format(v); }
+  function percent(v) { return String(Math.round(v * 100) / 100).replace('.', ','); }
+  function parseAmount(text) {
+    const clean = String(text).replace(/[\s  €]/g, '').replace(',', '.');
+    if (!/^\d*\.?\d*$/.test(clean) || clean === '' || clean === '.') return NaN;
+    return Math.round(parseFloat(clean) * 100) / 100;
+  }
+
+  // ---------- Données ----------
+
+  function defaultState() {
+    return {
+      version: 1,
+      settings: { share: 50, reserve: 20 },
+      charges: DEFAULT_CHARGES.map(([name, shared]) => ({ id: uid(), name, amount: 0, freq: 'month', shared })),
+      days: {},
+      closedMonths: {},
+      lastBackup: null
+    };
+  }
+
+  function isValidState(data) {
+    return data && typeof data === 'object'
+      && data.settings && typeof data.settings.share === 'number' && typeof data.settings.reserve === 'number'
+      && Array.isArray(data.charges) && data.days && typeof data.days === 'object';
+  }
+
+  function normalize(data) {
+    return {
+      version: 1,
+      settings: { share: data.settings.share, reserve: data.settings.reserve },
+      charges: data.charges.map((c) => ({
+        id: c.id || uid(),
+        name: String(c.name || 'Charge'),
+        amount: Number(c.amount) || 0,
+        freq: FREQ[c.freq] ? c.freq : 'month',
+        shared: Boolean(c.shared)
+      })),
+      days: Object.fromEntries(Object.entries(data.days).filter(([k, v]) => /^\d{4}-\d{2}-\d{2}$/.test(k) && Number(v) > 0)),
+      closedMonths: data.closedMonths && typeof data.closedMonths === 'object' ? data.closedMonths : {},
+      lastBackup: data.lastBackup || null
+    };
+  }
+
+  function load() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORE_KEY));
+      if (isValidState(saved)) return normalize(saved);
+    } catch (e) {}
+    return defaultState();
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+      return true;
+    } catch (e) {
+      toast("Impossible d'enregistrer sur ce téléphone");
+      return false;
+    }
+  }
+
+  // ---------- Calculs ----------
+
+  function chargeMonthly(c) { return c.amount / FREQ[c.freq].divisor * (c.shared ? 0.5 : 1); }
+  function chargesMonthly() { return state.charges.reduce((sum, c) => sum + chargeMonthly(c), 0); }
+  function currentParams() {
+    return { share: state.settings.share, reserve: state.settings.reserve, charges: chargesMonthly() };
+  }
+
+  // Un mois terminé garde les taux et les charges en vigueur à sa clôture,
+  // pour qu'un changement de loyer ne réécrive pas les mois passés.
+  // Tant que les charges ne sont pas renseignées, on n'en fige aucun.
+  function closePastMonths() {
+    if (chargesMonthly() === 0) return;
+    const current = monthOf(todayKey());
+    let changed = false;
+    for (const month of new Set(Object.keys(state.days).map(monthOf))) {
+      if (month < current && !state.closedMonths[month]) {
+        state.closedMonths[month] = currentParams();
+        changed = true;
+      }
+    }
+    if (changed) save();
+  }
+
+  function monthSummary(month) {
+    const params = state.closedMonths[month] || currentParams();
+    const days = Object.keys(state.days).filter((k) => monthOf(k) === month).sort().reverse();
+    const acts = days.reduce((sum, k) => sum + state.days[k], 0);
+    const keepRate = params.share / 100 * (1 - params.reserve / 100);
+    const share = acts * params.share / 100;
+    const reserve = share * params.reserve / 100;
+    const net = share - reserve;
+    const available = net - params.charges;
+    const coverage = params.charges > 0 ? net / params.charges : null;
+    const missing = params.charges - net;
+    const actsNeeded = missing > 0 && keepRate > 0 ? Math.ceil(missing / keepRate / 10) * 10 : 0;
+    return { month, params, days, acts, share, reserve, net, available, coverage, actsNeeded, keepRate };
+  }
+
+  function dayBreakdown(acts) {
+    const share = acts * state.settings.share / 100;
+    const reserve = share * state.settings.reserve / 100;
+    return { share, reserve, net: share - reserve };
+  }
+
+  // ---------- Affichage ----------
+
+  let state = load();
+  let viewMonth = monthOf(todayKey());
+  let editingDay = null;
+  let editingCharge = null;
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  }
+
+  function needsBackup() {
+    const count = Object.keys(state.days).length;
+    if (!count) return false;
+    if (!state.lastBackup) return count >= 5;
+    return daysBetween(state.lastBackup, todayKey()) >= BACKUP_EVERY_DAYS;
+  }
+
+  function renderMonth() {
+    const s = monthSummary(viewMonth);
+    const isCurrent = viewMonth === monthOf(todayKey());
+    const chargesSet = s.params.charges > 0;
+    let coverageHtml = '';
+    if (!chargesSet) {
+      coverageHtml = `<div class="hint">Renseigne tes charges pour voir ce qu'il te reste. <button type="button" class="hint-btn" data-goto="settings">Réglages</button></div>`;
+    } else {
+      const pct = Math.max(0, Math.min(100, Math.round(s.coverage * 100)));
+      const width = Math.max(0, Math.min(100, s.coverage * 100));
+      const covered = s.coverage >= 1;
+      coverageHtml = `
+        <div class="track"><div class="fill" style="width:${width}%"></div></div>
+        <div class="hint">${covered ? 'Charges du mois couvertes' : `Charges du mois couvertes à ${pct} %`}</div>
+        <div class="hint accent">${covered
+          ? `Au-delà, chaque 100 € d'actes te laisse ${money(100 * s.keepRate)}`
+          : `Encore ${money(s.actsNeeded)} d'actes pour les couvrir`}</div>`;
+    }
+
+    const dayRows = s.days.length
+      ? s.days.map((k) => `
+          <button type="button" class="row tap" data-day="${k}">
+            <span>${dayLabel(k)}</span>
+            <span class="end"><span class="v">${exact(state.days[k])}</span><span class="chev">›</span></span>
+          </button>`).join('')
+      : `<div class="empty">Aucune journée saisie ${isCurrent ? 'ce mois-ci' : 'ce mois-là'}.</div>`;
+
+    const average = s.days.length ? s.acts / s.days.length : 0;
+
+    $('#screen-month').innerHTML = `
+      <div class="topbar">
+        <button type="button" class="icon-btn" data-month-shift="-1" aria-label="Mois précédent">‹</button>
+        <h1>${monthLabel(viewMonth)}</h1>
+        <button type="button" class="icon-btn ${isCurrent ? 'invisible' : ''}" data-month-shift="1" aria-label="Mois suivant">›</button>
+      </div>
+      ${needsBackup() ? `<div class="banner"><span>Pense à sauvegarder tes données.</span><button type="button" data-backup>Sauvegarder</button></div>` : ''}
+      <div class="card hero">
+        <div class="label">Disponible pour toi${isCurrent ? ', à ce jour' : ''}</div>
+        <div class="big ${s.available < 0 && chargesSet ? 'neg' : ''}">${money(chargesSet ? s.available : s.net)}</div>
+        ${coverageHtml}
+        <button type="button" class="primary" data-add-day>Ajouter ma journée</button>
+      </div>
+      <div class="card">
+        <div class="row"><span class="k">Actes réalisés</span><span class="v">${money(s.acts)}</span></div>
+        <div class="row"><span class="k">Ta part (${percent(s.params.share)} %)</span><span class="v">${money(s.share)}</span></div>
+        <div class="row"><span class="k">À mettre de côté (${percent(s.params.reserve)} %)</span><span class="v">${minus(s.reserve)}</span></div>
+        <div class="row"><span class="k">Charges fixes</span><span class="v">${minus(s.params.charges)}</span></div>
+        <div class="row total"><span class="k">Disponible</span><span class="v">${money(s.available)}</span></div>
+      </div>
+      <h2 class="section">${s.days.length} ${s.days.length > 1 ? 'jours travaillés' : 'jour travaillé'}${s.days.length ? ` · ${money(average)} par jour` : ''}</h2>
+      <div class="card">${dayRows}</div>`;
+  }
+
+  function renderHistory() {
+    const months = [...new Set(Object.keys(state.days).map(monthOf))].sort().reverse();
+    const summaries = months.map(monthSummary);
+    const totals = summaries.reduce((t, s) => ({
+      acts: t.acts + s.acts, share: t.share + s.share, reserve: t.reserve + s.reserve, days: t.days + s.days.length
+    }), { acts: 0, share: 0, reserve: 0, days: 0 });
+
+    const monthRows = summaries.length
+      ? summaries.map((s) => `
+          <button type="button" class="row tap" data-open-month="${s.month}">
+            <span class="main"><span class="name">${monthLabel(s.month)}</span>
+              <span class="sub">${s.days.length} j · actes ${money(s.acts)} · part ${money(s.share)}</span></span>
+            <span class="end"><span class="v" style="color:${s.available < 0 ? 'var(--negative)' : 'var(--accent)'}">${money(s.available)}</span><span class="chev">›</span></span>
+          </button>`).join('')
+      : `<div class="empty">Les mois apparaîtront ici dès ta première journée.</div>`;
+
+    $('#screen-history').innerHTML = `
+      <h1>Historique</h1>
+      <h2 class="section">Depuis le début</h2>
+      <div class="card">
+        <div class="row"><span class="k">Actes réalisés</span><span class="v">${money(totals.acts)}</span></div>
+        <div class="row"><span class="k">Ta part</span><span class="v">${money(totals.share)}</span></div>
+        <div class="row"><span class="k">Jours travaillés</span><span class="v">${totals.days}</span></div>
+        <div class="row"><span class="k">Moyenne d'actes par jour</span><span class="v">${money(totals.days ? totals.acts / totals.days : 0)}</span></div>
+        <div class="row total"><span class="k">Mis de côté</span><span class="v">${money(totals.reserve)}</span></div>
+      </div>
+      <p class="foot">Le montant mis de côté sert à payer l'URSSAF, la CARCDSF et l'impôt : il doit rester sur le compte.</p>
+      <h2 class="section">Par mois · disponible après charges</h2>
+      <div class="card">${monthRows}</div>`;
+  }
+
+  function renderSettings() {
+    const chargeRows = state.charges.map((c) => {
+      const detail = c.amount
+        ? `${exact(c.amount)} ${FREQ[c.freq].label}${c.shared ? ' · partagée en deux' : ''}`
+        : 'Montant à compléter';
+      return `
+        <button type="button" class="row tap ${c.amount ? '' : 'todo'}" data-charge="${c.id}">
+          <span class="main"><span class="name">${escapeHtml(c.name)}</span><span class="sub">${detail}</span></span>
+          <span class="end"><span class="v">${c.amount ? money(chargeMonthly(c)) : 'À compléter'}</span><span class="chev">›</span></span>
+        </button>`;
+    }).join('');
+
+    $('#screen-settings').innerHTML = `
+      <h1>Réglages</h1>
+      <h2 class="section">Calcul</h2>
+      <div class="card">
+        <label class="row"><span>Ta part</span><span class="pct"><input type="text" inputmode="decimal" data-setting="share" value="${percent(state.settings.share)}"> %</span></label>
+        <label class="row"><span>Mise de côté</span><span class="pct"><input type="text" inputmode="decimal" data-setting="reserve" value="${percent(state.settings.reserve)}"> %</span></label>
+      </div>
+      <p class="foot">La mise de côté couvre l'URSSAF, la CARCDSF et l'impôt. Ne les ajoute pas dans les charges.</p>
+      <h2 class="section">Charges · ${money(chargesMonthly())} par mois</h2>
+      <div class="card">
+        ${chargeRows}
+        <button type="button" class="row tap" data-new-charge><span class="add">Ajouter une charge</span></button>
+      </div>
+      <p class="foot">Le montant à droite est ce que la charge te coûte par mois.</p>
+      <h2 class="section">Sauvegarde</h2>
+      <div class="card">
+        <button type="button" class="row tap" data-backup><span class="add">Sauvegarder mes données</span></button>
+        <button type="button" class="row tap" data-restore><span class="add">Restaurer une sauvegarde</span></button>
+      </div>
+      <p class="foot">${state.lastBackup ? `Dernière sauvegarde le ${longDate(state.lastBackup)}.` : 'Aucune sauvegarde pour l’instant.'}
+        Tes données restent sur ce téléphone. Si tu supprimes l'icône ou changes d'iPhone, seule une sauvegarde permet de les retrouver.</p>`;
+  }
+
+  function render() {
+    renderMonth();
+    renderHistory();
+    renderSettings();
+  }
+
+  function showTab(tab) {
+    for (const name of ['month', 'history', 'settings']) {
+      $(`#screen-${name}`).hidden = name !== tab;
+    }
+    document.querySelectorAll('.tabbar button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+    window.scrollTo(0, 0);
+  }
+
+  let toastTimer = null;
+  function toast(message) {
+    const el = $('#toast');
+    el.textContent = message;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+  }
+
+  function openSheet(id) {
+    $(id).hidden = false;
+    $(id).scrollTop = 0;
+    document.body.classList.add('locked');
+  }
+  function closeSheets() {
+    document.querySelectorAll('.sheet').forEach((s) => { s.hidden = true; });
+    document.body.classList.remove('locked');
+    document.activeElement && document.activeElement.blur();
+  }
+
+  // ---------- Saisie d'une journée ----------
+
+  function openDay(key) {
+    const date = key || todayKey();
+    $('#day-date').value = date;
+    $('#day-date').max = todayKey();
+    fillDay(date);
+    openSheet('#sheet-day');
+    $('#day-amount').focus();
+  }
+
+  function fillDay(date) {
+    editingDay = state.days[date] ? date : null;
+    $('#day-title').textContent = editingDay ? 'Modifier la journée' : 'Ma journée';
+    $('#day-amount').value = editingDay ? String(state.days[date]).replace('.', ',') : '';
+    $('#day-delete').hidden = !editingDay;
+    $('#day-error').hidden = true;
+    updateDayPreview();
+  }
+
+  function updateDayPreview() {
+    const acts = parseAmount($('#day-amount').value);
+    const b = dayBreakdown(Number.isFinite(acts) ? acts : 0);
+    $('#day-preview').innerHTML = `
+      <div class="row"><span class="k">Ta part (${percent(state.settings.share)} %)</span><span class="v">${money(b.share)}</span></div>
+      <div class="row"><span class="k">À mettre de côté</span><span class="v">${minus(b.reserve)}</span></div>
+      <div class="row total"><span class="k">Pour toi</span><span class="v">${money(b.net)}</span></div>`;
+  }
+
+  function saveDay() {
+    const date = $('#day-date').value;
+    const acts = parseAmount($('#day-amount').value);
+    const error = $('#day-error');
+    if (!date) { error.textContent = 'Choisis une date.'; error.hidden = false; return; }
+    if (!Number.isFinite(acts) || acts <= 0) { error.textContent = 'Entre le total des actes du jour, par exemple 680 ou 680,50.'; error.hidden = false; return; }
+    if (editingDay && editingDay !== date) delete state.days[editingDay];
+    state.days[date] = acts;
+    closePastMonths();
+    if (!save()) return;
+    viewMonth = monthOf(date);
+    closeSheets();
+    render();
+    showTab('month');
+    toast(`Journée enregistrée · ${money(dayBreakdown(acts).net)} pour toi`);
+  }
+
+  function deleteDay() {
+    if (!editingDay || !confirm(`Supprimer la journée du ${longDate(editingDay)} ?`)) return;
+    delete state.days[editingDay];
+    save();
+    closeSheets();
+    render();
+    toast('Journée supprimée');
+  }
+
+  // ---------- Charges ----------
+
+  function openCharge(id) {
+    const charge = state.charges.find((c) => c.id === id);
+    editingCharge = charge ? charge.id : null;
+    $('#charge-title').textContent = charge ? 'Modifier la charge' : 'Nouvelle charge';
+    $('#charge-name').value = charge ? charge.name : '';
+    $('#charge-amount').value = charge && charge.amount ? String(charge.amount).replace('.', ',') : '';
+    document.querySelector(`input[name="charge-freq"][value="${charge ? charge.freq : 'month'}"]`).checked = true;
+    $('#charge-shared').checked = charge ? charge.shared : false;
+    $('#charge-delete').hidden = !charge;
+    $('#charge-error').hidden = true;
+    updateChargePreview();
+    openSheet('#sheet-charge');
+    (charge ? $('#charge-amount') : $('#charge-name')).focus();
+  }
+
+  function readChargeForm() {
+    return {
+      name: $('#charge-name').value.trim(),
+      amount: parseAmount($('#charge-amount').value),
+      freq: document.querySelector('input[name="charge-freq"]:checked').value,
+      shared: $('#charge-shared').checked
+    };
+  }
+
+  function updateChargePreview() {
+    const c = readChargeForm();
+    $('#charge-preview').textContent = Number.isFinite(c.amount) && c.amount > 0
+      ? `Cette charge te coûte ${money(chargeMonthly(c))} par mois.`
+      : '';
+  }
+
+  function saveCharge() {
+    const c = readChargeForm();
+    const error = $('#charge-error');
+    if (!c.name) { error.textContent = 'Donne un nom à la charge.'; error.hidden = false; return; }
+    if (!Number.isFinite(c.amount) || c.amount < 0) { error.textContent = 'Entre un montant, par exemple 45 ou 45,90.'; error.hidden = false; return; }
+    if (editingCharge) {
+      Object.assign(state.charges.find((x) => x.id === editingCharge), c);
+    } else {
+      state.charges.push({ id: uid(), ...c });
+    }
+    if (!save()) return;
+    closeSheets();
+    render();
+    toast('Charge enregistrée');
+  }
+
+  function deleteCharge() {
+    const charge = state.charges.find((c) => c.id === editingCharge);
+    if (!charge || !confirm(`Supprimer la charge « ${charge.name} » ?`)) return;
+    state.charges = state.charges.filter((c) => c.id !== editingCharge);
+    save();
+    closeSheets();
+    render();
+    toast('Charge supprimée');
+  }
+
+  function saveSetting(input) {
+    const value = parseAmount(input.value);
+    const key = input.dataset.setting;
+    if (!Number.isFinite(value) || value < 0 || value > 100) {
+      input.value = percent(state.settings[key]);
+      toast('Entre un pourcentage entre 0 et 100');
+      return;
+    }
+    if (value === state.settings[key]) return;
+    state.settings[key] = value;
+    save();
+    renderMonth();
+    renderHistory();
+    toast('Réglage enregistré');
+  }
+
+  // ---------- Sauvegarde ----------
+
+  async function backup() {
+    const name = `ma-compta-${todayKey()}.json`;
+    const payload = JSON.stringify({ app: 'ma-compta', exportedAt: new Date().toISOString(), data: state }, null, 2);
+    const file = new File([payload], name, { type: 'application/json' });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Sauvegarde Ma compta' });
+      } else {
+        const url = URL.createObjectURL(file);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+      state.lastBackup = todayKey();
+      save();
+      render();
+      toast('Sauvegarde créée');
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+      toast("La sauvegarde n'a pas pu être créée");
+    }
+  }
+
+  async function restore(file) {
+    try {
+      const parsed = JSON.parse(await file.text());
+      const data = parsed && parsed.app === 'ma-compta' ? parsed.data : null;
+      if (!isValidState(data)) throw new Error('invalid');
+      if (!confirm('Remplacer les données de ce téléphone par cette sauvegarde ?')) return;
+      state = normalize(data);
+      closePastMonths();
+      save();
+      viewMonth = monthOf(todayKey());
+      render();
+      toast('Sauvegarde restaurée');
+    } catch (e) {
+      toast("Ce fichier n'est pas une sauvegarde Ma compta");
+    }
+  }
+
+  // ---------- Événements ----------
+
+  document.addEventListener('click', (event) => {
+    const t = event.target.closest('button');
+    if (!t) return;
+    if (t.dataset.tab) return showTab(t.dataset.tab);
+    if (t.dataset.goto) return showTab(t.dataset.goto);
+    if (t.dataset.monthShift) {
+      viewMonth = shiftMonth(viewMonth, Number(t.dataset.monthShift));
+      return renderMonth();
+    }
+    if (t.dataset.openMonth) {
+      viewMonth = t.dataset.openMonth;
+      renderMonth();
+      return showTab('month');
+    }
+    if ('addDay' in t.dataset) return openDay(viewMonth === monthOf(todayKey()) ? todayKey() : null);
+    if (t.dataset.day) return openDay(t.dataset.day);
+    if ('saveDay' in t.dataset) return saveDay();
+    if (t.dataset.charge) return openCharge(t.dataset.charge);
+    if ('newCharge' in t.dataset) return openCharge(null);
+    if ('saveCharge' in t.dataset) return saveCharge();
+    if ('close' in t.dataset) return closeSheets();
+    if ('backup' in t.dataset) return backup();
+    if ('restore' in t.dataset) return $('#import-file').click();
+  });
+
+  $('#day-amount').addEventListener('input', () => { $('#day-error').hidden = true; updateDayPreview(); });
+  $('#day-date').addEventListener('change', (e) => { if (e.target.value) fillDay(e.target.value); });
+  $('#day-delete').addEventListener('click', deleteDay);
+  $('#charge-delete').addEventListener('click', deleteCharge);
+  $('#sheet-charge').addEventListener('input', () => { $('#charge-error').hidden = true; updateChargePreview(); });
+  $('#screen-settings').addEventListener('change', (e) => { if (e.target.dataset.setting) saveSetting(e.target); });
+  $('#import-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (file) restore(file);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeSheets();
+    if (e.key === 'Enter' && !$('#sheet-day').hidden) saveDay();
+    if (e.key === 'Enter' && !$('#sheet-charge').hidden) saveCharge();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') { closePastMonths(); render(); }
+  });
+
+  closePastMonths();
+  render();
+
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+</script>
+</body>
+</html>
