@@ -193,25 +193,43 @@
   </button>
 </nav>
 
-<div class="sheet" id="sheet-day" role="dialog" aria-modal="true" aria-labelledby="day-title" hidden>
+<div class="sheet" id="sheet-month" role="dialog" aria-modal="true" aria-labelledby="month-title" hidden>
   <div class="sheet-bar">
     <button type="button" class="link" data-close>Annuler</button>
-    <h2 id="day-title">Ma journée</h2>
-    <button type="button" class="link strong" data-save-day>Enregistrer</button>
+    <h2 id="month-title">Mon mois</h2>
+    <button type="button" class="link strong" data-save-month>Enregistrer</button>
+  </div>
+  <div class="sheet-body">
+    <label class="field-label" for="month-amount">Total des actes du mois, à ce jour</label>
+    <div class="amount">
+      <input type="text" id="month-amount" inputmode="decimal" autocomplete="off" placeholder="0">
+      <span>€</span>
+    </div>
+    <p class="foot" id="month-note" style="margin: 0 16px 18px"></p>
+    <p class="error" id="month-error" hidden></p>
+    <div class="card" id="month-preview"></div>
+    <button type="button" class="primary" data-save-month>Enregistrer</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheet-transfer" role="dialog" aria-modal="true" aria-labelledby="transfer-title" hidden>
+  <div class="sheet-bar">
+    <button type="button" class="link" data-close>Annuler</button>
+    <h2 id="transfer-title">Virement reçu</h2>
+    <button type="button" class="link strong" data-save-transfer>Enregistrer</button>
   </div>
   <div class="sheet-body">
     <div class="card">
-      <label class="row"><span>Date</span><input type="date" id="day-date"></label>
+      <label class="row"><span>Date</span><input type="date" id="transfer-date"></label>
     </div>
-    <label class="field-label" for="day-amount">Total des actes du jour</label>
+    <label class="field-label" for="transfer-amount">Montant reçu</label>
     <div class="amount">
-      <input type="text" id="day-amount" inputmode="decimal" autocomplete="off" placeholder="0">
+      <input type="text" id="transfer-amount" inputmode="decimal" autocomplete="off" placeholder="0">
       <span>€</span>
     </div>
-    <p class="error" id="day-error" hidden></p>
-    <div class="card" id="day-preview"></div>
-    <button type="button" class="primary" data-save-day>Enregistrer</button>
-    <button type="button" class="danger-btn" id="day-delete" hidden>Supprimer cette journée</button>
+    <p class="error" id="transfer-error" hidden></p>
+    <button type="button" class="primary" data-save-transfer>Enregistrer</button>
+    <button type="button" class="danger-btn" id="transfer-delete" hidden>Supprimer ce virement</button>
   </div>
 </div>
 
@@ -314,24 +332,63 @@
 
   function defaultState() {
     return {
-      version: 1,
+      version: 2,
       settings: { share: 50, reserve: 20 },
       charges: DEFAULT_CHARGES.map(([name, shared]) => ({ id: uid(), name, amount: 0, freq: 'month', shared })),
-      days: {},
+      months: {},
+      transfers: [],
       closedMonths: {},
+      startedOn: null,
       lastBackup: null
     };
   }
 
+  const isDay = (key) => /^\d{4}-\d{2}-\d{2}$/.test(key);
+  const isMonth = (key) => /^\d{4}-\d{2}$/.test(key);
+  const round2 = (v) => Math.round(v * 100) / 100;
+
   function isValidState(data) {
     return data && typeof data === 'object'
       && data.settings && typeof data.settings.share === 'number' && typeof data.settings.reserve === 'number'
-      && Array.isArray(data.charges) && data.days && typeof data.days === 'object';
+      && Array.isArray(data.charges)
+      && ((data.months && typeof data.months === 'object') || (data.days && typeof data.days === 'object'));
+  }
+
+  // La première version enregistrait les actes jour par jour :
+  // chaque mois reprend la somme de ses journées.
+  function monthsFromDays(days) {
+    const months = {};
+    for (const [key, value] of Object.entries(days)) {
+      if (!isDay(key) || !(Number(value) > 0)) continue;
+      const month = months[monthOf(key)] || (months[monthOf(key)] = { acts: 0, updated: key, skipReserve: false });
+      month.acts = round2(month.acts + Number(value));
+      if (key > month.updated) month.updated = key;
+    }
+    return months;
   }
 
   function normalize(data) {
+    const source = data.months && typeof data.months === 'object' ? data.months : monthsFromDays(data.days);
+    const months = {};
+    for (const [key, value] of Object.entries(source)) {
+      if (!isMonth(key) || !value || typeof value !== 'object') continue;
+      const entry = {
+        acts: Number(value.acts) > 0 ? round2(Number(value.acts)) : 0,
+        updated: isDay(value.updated) ? value.updated : null,
+        skipReserve: Boolean(value.skipReserve)
+      };
+      if (entry.acts || entry.skipReserve) months[key] = entry;
+    }
+    const transfers = (Array.isArray(data.transfers) ? data.transfers : [])
+      .filter((t) => t && isDay(t.date) && Number(t.amount) > 0)
+      .map((t) => ({ id: t.id || uid(), date: t.date, amount: round2(Number(t.amount)) }));
+    const firstDates = [
+      ...Object.keys(data.days || {}).filter(isDay),
+      ...Object.values(months).map((m) => m.updated).filter(Boolean),
+      ...transfers.map((t) => t.date)
+    ].sort();
     return {
-      version: 1,
+      version: 2,
       settings: { share: data.settings.share, reserve: data.settings.reserve },
       charges: data.charges.map((c) => ({
         id: c.id || uid(),
@@ -340,8 +397,10 @@
         freq: FREQ[c.freq] ? c.freq : 'month',
         shared: Boolean(c.shared)
       })),
-      days: Object.fromEntries(Object.entries(data.days).filter(([k, v]) => /^\d{4}-\d{2}-\d{2}$/.test(k) && Number(v) > 0)),
+      months,
+      transfers,
       closedMonths: data.closedMonths && typeof data.closedMonths === 'object' ? data.closedMonths : {},
+      startedOn: isDay(data.startedOn) ? data.startedOn : firstDates[0] || null,
       lastBackup: data.lastBackup || null
     };
   }
@@ -364,6 +423,16 @@
     }
   }
 
+  function monthEntry(month) {
+    return state.months[month] || { acts: 0, updated: null, skipReserve: false };
+  }
+
+  function setMonthEntry(month, changes) {
+    const entry = { ...monthEntry(month), ...changes };
+    if (entry.acts || entry.skipReserve) state.months[month] = entry;
+    else delete state.months[month];
+  }
+
   // ---------- Calculs ----------
 
   function chargeMonthly(c) { return c.amount / FREQ[c.freq].divisor * (c.shared ? 0.5 : 1); }
@@ -379,8 +448,8 @@
     if (chargesMonthly() === 0) return;
     const current = monthOf(todayKey());
     let changed = false;
-    for (const month of new Set(Object.keys(state.days).map(monthOf))) {
-      if (month < current && !state.closedMonths[month]) {
+    for (const [month, entry] of Object.entries(state.months)) {
+      if (month < current && entry.acts && !state.closedMonths[month]) {
         state.closedMonths[month] = currentParams();
         changed = true;
       }
@@ -388,32 +457,57 @@
     if (changed) save();
   }
 
-  function monthSummary(month) {
-    const params = state.closedMonths[month] || currentParams();
-    const days = Object.keys(state.days).filter((k) => monthOf(k) === month).sort().reverse();
-    const acts = days.reduce((sum, k) => sum + state.days[k], 0);
-    const keepRate = params.share / 100 * (1 - params.reserve / 100);
+  function breakdown(acts, params, skipReserve) {
+    const reserveRate = skipReserve ? 0 : params.reserve;
     const share = acts * params.share / 100;
-    const reserve = share * params.reserve / 100;
-    const net = share - reserve;
-    const available = net - params.charges;
-    const coverage = params.charges > 0 ? net / params.charges : null;
-    const missing = params.charges - net;
-    const actsNeeded = missing > 0 && keepRate > 0 ? Math.ceil(missing / keepRate / 10) * 10 : 0;
-    return { month, params, days, acts, share, reserve, net, available, coverage, actsNeeded, keepRate };
+    const reserve = share * reserveRate / 100;
+    return { share, reserve, net: share - reserve, keepRate: params.share / 100 * (1 - reserveRate / 100) };
   }
 
-  function dayBreakdown(acts) {
-    const share = acts * state.settings.share / 100;
-    const reserve = share * state.settings.reserve / 100;
-    return { share, reserve, net: share - reserve };
+  function transfersOf(month) {
+    return state.transfers.filter((t) => monthOf(t.date) === month).sort((a, b) => b.date.localeCompare(a.date));
+  }
+
+  function monthSummary(month) {
+    const params = state.closedMonths[month] || currentParams();
+    const entry = monthEntry(month);
+    const b = breakdown(entry.acts, params, entry.skipReserve);
+    const available = b.net - params.charges;
+    const coverage = params.charges > 0 ? b.net / params.charges : null;
+    const missing = params.charges - b.net;
+    const actsNeeded = missing > 0 && b.keepRate > 0 ? Math.ceil(missing / b.keepRate / 10) * 10 : 0;
+    const transfers = transfersOf(month);
+    const received = transfers.reduce((sum, t) => sum + t.amount, 0);
+    const skipped = entry.skipReserve ? b.share * params.reserve / 100 : 0;
+    return { month, params, ...entry, ...b, available, coverage, actsNeeded, transfers, received, skipped };
+  }
+
+  // Mois qui ont des actes ou des virements, du plus récent au plus ancien.
+  function activeMonths() {
+    const months = new Set(state.transfers.map((t) => monthOf(t.date)));
+    for (const [month, entry] of Object.entries(state.months)) if (entry.acts) months.add(month);
+    return [...months].sort().reverse();
+  }
+
+  // Cumul jusqu'au mois affiché : un virement arrivé le mois suivant
+  // compense le mois précédent.
+  function balanceUntil(month) {
+    return activeMonths().filter((m) => m <= month).map(monthSummary)
+      .reduce((t, s) => ({ received: t.received + s.received, share: t.share + s.share }), { received: 0, share: 0 });
+  }
+
+  function gap(received, share) {
+    const diff = Math.round(received - share);
+    if (diff > 0) return { k: 'Reçu en plus de ta part', v: '+' + money(diff) };
+    if (diff < 0) return { k: 'Reste à recevoir', v: money(-diff) };
+    return { k: 'Virements à jour', v: money(0) };
   }
 
   // ---------- Affichage ----------
 
   let state = load();
   let viewMonth = monthOf(todayKey());
-  let editingDay = null;
+  let editingTransfer = null;
   let editingCharge = null;
 
   function escapeHtml(s) {
@@ -421,9 +515,8 @@
   }
 
   function needsBackup() {
-    const count = Object.keys(state.days).length;
-    if (!count) return false;
-    if (!state.lastBackup) return count >= 5;
+    if (!state.startedOn || !activeMonths().length) return false;
+    if (!state.lastBackup) return daysBetween(state.startedOn, todayKey()) >= 7;
     return daysBetween(state.lastBackup, todayKey()) >= BACKUP_EVERY_DAYS;
   }
 
@@ -446,15 +539,28 @@
           : `Encore ${money(s.actsNeeded)} d'actes pour les couvrir`}</div>`;
     }
 
-    const dayRows = s.days.length
-      ? s.days.map((k) => `
-          <button type="button" class="row tap" data-day="${k}">
-            <span>${dayLabel(k)}</span>
-            <span class="end"><span class="v">${exact(state.days[k])}</span><span class="chev">›</span></span>
+    const transferRows = s.transfers.length
+      ? s.transfers.map((t) => `
+          <button type="button" class="row tap" data-transfer="${t.id}">
+            <span>${dayLabel(t.date)}</span>
+            <span class="end"><span class="v">${exact(t.amount)}</span><span class="chev">›</span></span>
           </button>`).join('')
-      : `<div class="empty">Aucune journée saisie ${isCurrent ? 'ce mois-ci' : 'ce mois-là'}.</div>`;
+      : `<div class="empty">Aucun virement saisi ${isCurrent ? 'ce mois-ci' : 'ce mois-là'}.</div>`;
 
-    const average = s.days.length ? s.acts / s.days.length : 0;
+    let gapHtml = '';
+    if (state.transfers.length) {
+      const monthGap = gap(s.received, s.share);
+      const total = balanceUntil(viewMonth);
+      const totalGap = gap(total.received, total.share);
+      gapHtml = `
+      <div class="card">
+        <div class="row"><span class="k">Virements reçus</span><span class="v">${money(s.received)}</span></div>
+        <div class="row"><span class="k">Ta part du mois</span><span class="v">${money(s.share)}</span></div>
+        <div class="row total"><span class="k">${monthGap.k}</span><span class="v">${monthGap.v}</span></div>
+        <div class="row"><span class="main"><span>Depuis le début</span><span class="sub">${totalGap.k}</span></span><span class="v">${totalGap.v}</span></div>
+      </div>
+      <p class="foot">Les virements sont comparés à ta part des actes. Le cumul reste juste quand un virement arrive le mois suivant.</p>`;
+    }
 
     $('#screen-month').innerHTML = `
       <div class="topbar">
@@ -467,34 +573,43 @@
         <div class="label">Disponible pour toi${isCurrent ? ', à ce jour' : ''}</div>
         <div class="big ${s.available < 0 && chargesSet ? 'neg' : ''}">${money(chargesSet ? s.available : s.net)}</div>
         ${coverageHtml}
-        <button type="button" class="primary" data-add-day>Ajouter ma journée</button>
+        <button type="button" class="primary" data-edit-month>${isCurrent ? 'Actualiser mon mois' : 'Modifier ce mois'}</button>
       </div>
       <div class="card">
-        <div class="row"><span class="k">Actes réalisés</span><span class="v">${money(s.acts)}</span></div>
+        <div class="row"><span class="main"><span class="k">Actes réalisés</span>${s.updated ? `<span class="sub">Total au ${longDate(s.updated)}</span>` : ''}</span><span class="v">${money(s.acts)}</span></div>
         <div class="row"><span class="k">Ta part (${percent(s.params.share)} %)</span><span class="v">${money(s.share)}</span></div>
-        <div class="row"><span class="k">À mettre de côté (${percent(s.params.reserve)} %)</span><span class="v">${minus(s.reserve)}</span></div>
+        <div class="row">
+          <span class="k">${s.skipReserve ? 'Pas de mise de côté' : `Mise de côté (${percent(s.params.reserve)} %)`}</span>
+          <span class="end"><span class="v">${minus(s.reserve)}</span><input type="checkbox" class="switch" data-reserve-toggle aria-label="Mettre de côté ce mois-ci" ${s.skipReserve ? '' : 'checked'}></span>
+        </div>
         <div class="row"><span class="k">Charges fixes</span><span class="v">${minus(s.params.charges)}</span></div>
         <div class="row total"><span class="k">Disponible</span><span class="v">${money(s.available)}</span></div>
       </div>
-      <h2 class="section">${s.days.length} ${s.days.length > 1 ? 'jours travaillés' : 'jour travaillé'}${s.days.length ? ` · ${money(average)} par jour` : ''}</h2>
-      <div class="card">${dayRows}</div>`;
+      ${s.skipped ? `<p class="foot">Ce mois-ci, ${money(s.skipped)} ne sont pas mis de côté. L'URSSAF, la CARCDSF et l'impôt restent dus.</p>` : ''}
+      <h2 class="section">Virements reçus</h2>
+      <div class="card">
+        ${transferRows}
+        <button type="button" class="row tap" data-add-transfer><span class="add">Ajouter un virement</span></button>
+      </div>
+      ${gapHtml}`;
   }
 
   function renderHistory() {
-    const months = [...new Set(Object.keys(state.days).map(monthOf))].sort().reverse();
-    const summaries = months.map(monthSummary);
+    const summaries = activeMonths().map(monthSummary);
     const totals = summaries.reduce((t, s) => ({
-      acts: t.acts + s.acts, share: t.share + s.share, reserve: t.reserve + s.reserve, days: t.days + s.days.length
-    }), { acts: 0, share: 0, reserve: 0, days: 0 });
+      acts: t.acts + s.acts, share: t.share + s.share, reserve: t.reserve + s.reserve,
+      skipped: t.skipped + s.skipped, received: t.received + s.received
+    }), { acts: 0, share: 0, reserve: 0, skipped: 0, received: 0 });
+    const balance = gap(totals.received, totals.share);
 
     const monthRows = summaries.length
       ? summaries.map((s) => `
           <button type="button" class="row tap" data-open-month="${s.month}">
             <span class="main"><span class="name">${monthLabel(s.month)}</span>
-              <span class="sub">${s.days.length} j · actes ${money(s.acts)} · part ${money(s.share)}</span></span>
+              <span class="sub">actes ${money(s.acts)} · part ${money(s.share)}</span></span>
             <span class="end"><span class="v" style="color:${s.available < 0 ? 'var(--negative)' : 'var(--accent)'}">${money(s.available)}</span><span class="chev">›</span></span>
           </button>`).join('')
-      : `<div class="empty">Les mois apparaîtront ici dès ta première journée.</div>`;
+      : `<div class="empty">Les mois apparaîtront ici dès ta première saisie.</div>`;
 
     $('#screen-history').innerHTML = `
       <h1>Historique</h1>
@@ -502,11 +617,19 @@
       <div class="card">
         <div class="row"><span class="k">Actes réalisés</span><span class="v">${money(totals.acts)}</span></div>
         <div class="row"><span class="k">Ta part</span><span class="v">${money(totals.share)}</span></div>
-        <div class="row"><span class="k">Jours travaillés</span><span class="v">${totals.days}</span></div>
-        <div class="row"><span class="k">Moyenne d'actes par jour</span><span class="v">${money(totals.days ? totals.acts / totals.days : 0)}</span></div>
         <div class="row total"><span class="k">Mis de côté</span><span class="v">${money(totals.reserve)}</span></div>
+        ${totals.skipped ? `<div class="row todo"><span class="k">Pas encore mis de côté</span><span class="v">${money(totals.skipped)}</span></div>` : ''}
       </div>
-      <p class="foot">Le montant mis de côté sert à payer l'URSSAF, la CARCDSF et l'impôt : il doit rester sur le compte.</p>
+      <p class="foot">Le montant mis de côté sert à payer l'URSSAF, la CARCDSF et l'impôt : il doit rester sur le compte.${totals.skipped
+        ? " Les mois sans mise de côté laissent une somme à prévoir, car ces cotisations et l'impôt restent dus."
+        : ''}</p>
+      ${state.transfers.length ? `
+      <h2 class="section">Virements depuis le début</h2>
+      <div class="card">
+        <div class="row"><span class="k">Virements reçus</span><span class="v">${money(totals.received)}</span></div>
+        <div class="row"><span class="k">Ta part</span><span class="v">${money(totals.share)}</span></div>
+        <div class="row total"><span class="k">${balance.k}</span><span class="v">${balance.v}</span></div>
+      </div>` : ''}
       <h2 class="section">Par mois · disponible après charges</h2>
       <div class="card">${monthRows}</div>`;
   }
@@ -530,7 +653,7 @@
         <label class="row"><span>Ta part</span><span class="pct"><input type="text" inputmode="decimal" data-setting="share" value="${percent(state.settings.share)}"> %</span></label>
         <label class="row"><span>Mise de côté</span><span class="pct"><input type="text" inputmode="decimal" data-setting="reserve" value="${percent(state.settings.reserve)}"> %</span></label>
       </div>
-      <p class="foot">La mise de côté couvre l'URSSAF, la CARCDSF et l'impôt. Ne les ajoute pas dans les charges.</p>
+      <p class="foot">La mise de côté couvre l'URSSAF, la CARCDSF et l'impôt. Ne les ajoute pas dans les charges. Tu peux la couper pour un mois depuis l'écran Mois.</p>
       <h2 class="section">Charges · ${money(chargesMonthly())} par mois</h2>
       <div class="card">
         ${chargeRows}
@@ -580,59 +703,96 @@
     document.activeElement && document.activeElement.blur();
   }
 
-  // ---------- Saisie d'une journée ----------
+  // ---------- Total du mois ----------
 
-  function openDay(key) {
-    const date = key || todayKey();
-    $('#day-date').value = date;
-    $('#day-date').max = todayKey();
-    fillDay(date);
-    openSheet('#sheet-day');
-    $('#day-amount').focus();
+  function openMonth() {
+    const entry = monthEntry(viewMonth);
+    $('#month-title').textContent = monthLabel(viewMonth);
+    $('#month-amount').value = entry.acts ? String(entry.acts).replace('.', ',') : '';
+    $('#month-note').textContent = entry.updated
+      ? `Dernière mise à jour le ${longDate(entry.updated)}. Le nouveau total remplace l'ancien.`
+      : "Recopie le total de l'Excel du cabinet. Tu pourras le mettre à jour quand tu veux.";
+    $('#month-error').hidden = true;
+    updateMonthPreview();
+    openSheet('#sheet-month');
+    $('#month-amount').focus();
+    $('#month-amount').select();
   }
 
-  function fillDay(date) {
-    editingDay = state.days[date] ? date : null;
-    $('#day-title').textContent = editingDay ? 'Modifier la journée' : 'Ma journée';
-    $('#day-amount').value = editingDay ? String(state.days[date]).replace('.', ',') : '';
-    $('#day-delete').hidden = !editingDay;
-    $('#day-error').hidden = true;
-    updateDayPreview();
+  function updateMonthPreview() {
+    const acts = parseAmount($('#month-amount').value);
+    const s = monthSummary(viewMonth);
+    const b = breakdown(Number.isFinite(acts) ? acts : 0, s.params, s.skipReserve);
+    $('#month-preview').innerHTML = `
+      <div class="row"><span class="k">Ta part (${percent(s.params.share)} %)</span><span class="v">${money(b.share)}</span></div>
+      <div class="row"><span class="k">${s.skipReserve ? 'Pas de mise de côté' : 'À mettre de côté'}</span><span class="v">${minus(b.reserve)}</span></div>
+      <div class="row total"><span class="k">Pour toi, avant charges</span><span class="v">${money(b.net)}</span></div>`;
   }
 
-  function updateDayPreview() {
-    const acts = parseAmount($('#day-amount').value);
-    const b = dayBreakdown(Number.isFinite(acts) ? acts : 0);
-    $('#day-preview').innerHTML = `
-      <div class="row"><span class="k">Ta part (${percent(state.settings.share)} %)</span><span class="v">${money(b.share)}</span></div>
-      <div class="row"><span class="k">À mettre de côté</span><span class="v">${minus(b.reserve)}</span></div>
-      <div class="row total"><span class="k">Pour toi</span><span class="v">${money(b.net)}</span></div>`;
-  }
-
-  function saveDay() {
-    const date = $('#day-date').value;
-    const acts = parseAmount($('#day-amount').value);
-    const error = $('#day-error');
-    if (!date) { error.textContent = 'Choisis une date.'; error.hidden = false; return; }
-    if (!Number.isFinite(acts) || acts <= 0) { error.textContent = 'Entre le total des actes du jour, par exemple 680 ou 680,50.'; error.hidden = false; return; }
-    if (editingDay && editingDay !== date) delete state.days[editingDay];
-    state.days[date] = acts;
+  function saveMonth() {
+    const acts = parseAmount($('#month-amount').value);
+    const error = $('#month-error');
+    if (!Number.isFinite(acts)) { error.textContent = 'Entre le total des actes du mois, par exemple 8 450 ou 8 450,50.'; error.hidden = false; return; }
+    setMonthEntry(viewMonth, { acts, updated: todayKey() });
+    if (!state.startedOn) state.startedOn = todayKey();
     closePastMonths();
+    if (!save()) return;
+    closeSheets();
+    render();
+    toast(`${monthLabel(viewMonth)} actualisé`);
+  }
+
+  function toggleReserve(input) {
+    setMonthEntry(viewMonth, { skipReserve: !input.checked });
+    if (!save()) return;
+    render();
+    toast(`Mise de côté ${input.checked ? 'activée' : 'désactivée'} · ${monthLabel(viewMonth)}`);
+  }
+
+  // ---------- Virements ----------
+
+  function openTransfer(id) {
+    const transfer = state.transfers.find((t) => t.id === id);
+    editingTransfer = transfer ? transfer.id : null;
+    const isCurrent = viewMonth === monthOf(todayKey());
+    $('#transfer-title').textContent = transfer ? 'Modifier le virement' : 'Virement reçu';
+    $('#transfer-date').value = transfer ? transfer.date : isCurrent ? todayKey() : viewMonth + '-01';
+    $('#transfer-date').max = todayKey();
+    $('#transfer-amount').value = transfer ? String(transfer.amount).replace('.', ',') : '';
+    $('#transfer-delete').hidden = !transfer;
+    $('#transfer-error').hidden = true;
+    openSheet('#sheet-transfer');
+    $('#transfer-amount').focus();
+  }
+
+  function saveTransfer() {
+    const date = $('#transfer-date').value;
+    const amount = parseAmount($('#transfer-amount').value);
+    const error = $('#transfer-error');
+    if (!date) { error.textContent = 'Choisis la date du virement.'; error.hidden = false; return; }
+    if (!Number.isFinite(amount) || amount <= 0) { error.textContent = 'Entre le montant reçu, par exemple 4 000 ou 4 000,50.'; error.hidden = false; return; }
+    if (editingTransfer) {
+      Object.assign(state.transfers.find((t) => t.id === editingTransfer), { date, amount });
+    } else {
+      state.transfers.push({ id: uid(), date, amount });
+    }
+    if (!state.startedOn) state.startedOn = todayKey();
     if (!save()) return;
     viewMonth = monthOf(date);
     closeSheets();
     render();
     showTab('month');
-    toast(`Journée enregistrée · ${money(dayBreakdown(acts).net)} pour toi`);
+    toast('Virement enregistré');
   }
 
-  function deleteDay() {
-    if (!editingDay || !confirm(`Supprimer la journée du ${longDate(editingDay)} ?`)) return;
-    delete state.days[editingDay];
+  function deleteTransfer() {
+    const transfer = state.transfers.find((t) => t.id === editingTransfer);
+    if (!transfer || !confirm(`Supprimer le virement du ${longDate(transfer.date)} ?`)) return;
+    state.transfers = state.transfers.filter((t) => t.id !== editingTransfer);
     save();
     closeSheets();
     render();
-    toast('Journée supprimée');
+    toast('Virement supprimé');
   }
 
   // ---------- Charges ----------
@@ -772,9 +932,11 @@
       renderMonth();
       return showTab('month');
     }
-    if ('addDay' in t.dataset) return openDay(viewMonth === monthOf(todayKey()) ? todayKey() : null);
-    if (t.dataset.day) return openDay(t.dataset.day);
-    if ('saveDay' in t.dataset) return saveDay();
+    if ('editMonth' in t.dataset) return openMonth();
+    if ('saveMonth' in t.dataset) return saveMonth();
+    if ('addTransfer' in t.dataset) return openTransfer(null);
+    if (t.dataset.transfer) return openTransfer(t.dataset.transfer);
+    if ('saveTransfer' in t.dataset) return saveTransfer();
     if (t.dataset.charge) return openCharge(t.dataset.charge);
     if ('newCharge' in t.dataset) return openCharge(null);
     if ('saveCharge' in t.dataset) return saveCharge();
@@ -783,9 +945,10 @@
     if ('restore' in t.dataset) return $('#import-file').click();
   });
 
-  $('#day-amount').addEventListener('input', () => { $('#day-error').hidden = true; updateDayPreview(); });
-  $('#day-date').addEventListener('change', (e) => { if (e.target.value) fillDay(e.target.value); });
-  $('#day-delete').addEventListener('click', deleteDay);
+  $('#month-amount').addEventListener('input', () => { $('#month-error').hidden = true; updateMonthPreview(); });
+  $('#transfer-amount').addEventListener('input', () => { $('#transfer-error').hidden = true; });
+  $('#transfer-delete').addEventListener('click', deleteTransfer);
+  $('#screen-month').addEventListener('change', (e) => { if ('reserveToggle' in e.target.dataset) toggleReserve(e.target); });
   $('#charge-delete').addEventListener('click', deleteCharge);
   $('#sheet-charge').addEventListener('input', () => { $('#charge-error').hidden = true; updateChargePreview(); });
   $('#screen-settings').addEventListener('change', (e) => { if (e.target.dataset.setting) saveSetting(e.target); });
@@ -796,7 +959,8 @@
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeSheets();
-    if (e.key === 'Enter' && !$('#sheet-day').hidden) saveDay();
+    if (e.key === 'Enter' && !$('#sheet-month').hidden) saveMonth();
+    if (e.key === 'Enter' && !$('#sheet-transfer').hidden) saveTransfer();
     if (e.key === 'Enter' && !$('#sheet-charge').hidden) saveCharge();
   });
   document.addEventListener('visibilitychange', () => {
