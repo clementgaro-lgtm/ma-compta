@@ -963,8 +963,19 @@
     if (e.key === 'Enter' && !$('#sheet-transfer').hidden) saveTransfer();
     if (e.key === 'Enter' && !$('#sheet-charge').hidden) saveCharge();
   });
+  // Retour sur l'appli restée ouverte en arrière-plan : si le mois a changé
+  // entre-temps, on passe au nouveau mois au lieu de rester sur l'ancien.
+  let lastCurrentMonth = monthOf(todayKey());
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') { closePastMonths(); render(); }
+    if (document.visibilityState !== 'visible') return;
+    const current = monthOf(todayKey());
+    if (current !== lastCurrentMonth) {
+      closeSheets();
+      viewMonth = current;
+      lastCurrentMonth = current;
+    }
+    closePastMonths();
+    render();
   });
 
   closePastMonths();
